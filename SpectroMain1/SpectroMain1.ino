@@ -17,33 +17,33 @@ Adafruit_AS7341 as7341;
 #define DHTPIN 33
 #define DHTTYPE DHT22
 
-// #define WIFI_SSID "TKL"
-// #define WIFI_PASS "oraganti"
-// #define API "AIzaSyADIx4Bxv0SO8nUIAzv-1n53oYEFi1h14I"
-// #define DATABASE_URL "https://esp32-light-spectrum-analyzer-default-rtdb.asia-southeast1.firebasedatabase.app/"
+#define WIFI_SSID "TKL"
+#define WIFI_PASS "oraganti"
+#define API "AIzaSyADIx4Bxv0SO8nUIAzv-1n53oYEFi1h14I"
+#define DATABASE_URL "https://esp32-light-spectrum-analyzer-default-rtdb.asia-southeast1.firebasedatabase.app/"
 
-// FirebaseAuth auth;
-// FirebaseData fbdo;
-// FirebaseConfig config;
+FirebaseAuth auth;
+FirebaseData fbdo;
+FirebaseConfig config;
 
 DHT dht(DHTPIN, DHTTYPE);
 
-// bool signUpOK = false;
+bool signUpOK = false;
 
 //====================================================================
 
-// bool uploadToFirebase(FirebaseData &fbdo, const char *path, float value) {
-//   if (Firebase.RTDB.setFloat(&fbdo, path, value)) {
-//     Serial.print(value);
-//     Serial.print(" - Saved to ");
-//     Serial.println(path);
-//     return true;
-//   } else {
-//     Serial.print("GAGAL : ");
-//     Serial.println(fbdo.errorReason());
-//     return false;
-//   }
-// }
+bool uploadToFirebase(FirebaseData &fbdo, const char *path, float value) {
+  if (Firebase.RTDB.setFloat(&fbdo, path, value)) {
+    Serial.print(value);
+    Serial.print(" - Saved to ");
+    Serial.println(path);
+    return true;
+  } else {
+    Serial.print("GAGAL : ");
+    Serial.println(fbdo.errorReason());
+    return false;
+  }
+}
 
 //=================================================================
 
@@ -68,37 +68,37 @@ void setup() {
   as7341.setASTEP(999);
   as7341.setGain(AS7341_GAIN_256X);
 
-  // WiFi.begin(WIFI_SSID, WIFI_PASS);
-  // Serial.print("Menghubungkan ke Wifi");
-  // while(WiFi.status() != WL_CONNECTED) {
-  //   Serial.print(".");
-  //   delay(300);
-  // }
-  // Serial.println();
-  // Serial.print("Terhubung dengan IP : ");
-  // Serial.println(WiFi.localIP());
-  // Serial.println();
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.print("Menghubungkan ke Wifi");
+  while(WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(300);
+  }
+  Serial.println();
+  Serial.print("Terhubung dengan IP : ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
 
-  // String ssid = String(WiFi.SSID());
-  // String ip = WiFi.localIP().toString();
+  String ssid = String(WiFi.SSID());
+  String ip = WiFi.localIP().toString();
 
-  // config.api_key = API;
-  // config.database_url = DATABASE_URL;
-  // if(Firebase.signUp(&config, &auth, "", "")) {
-  //   Serial.println("Sign Up OK");
-  //   signUpOK = true;
-  // } else {
-  //   Serial.printf("%s\n", config.signer.signupError.message.c_str());
-  // }
+  config.api_key = API;
+  config.database_url = DATABASE_URL;
+  if(Firebase.signUp(&config, &auth, "", "")) {
+    Serial.println("Sign Up OK");
+    signUpOK = true;
+  } else {
+    Serial.printf("%s\n", config.signer.signupError.message.c_str());
+  }
 
-  // config.token_status_callback = tokenStatusCallback;
-  // Firebase.begin(&config, &auth);
-  // Firebase.reconnectWiFi(true);
+  config.token_status_callback = tokenStatusCallback;
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
 
-  // if (Firebase.ready() && signUpOK) {
-  //   uploadToFirebase(fbdo, "Informasi/SSID", ssid.toFloat());
-  //   uploadToFirebase(fbdo, "Informasi/IP", ip.toFloat());
-  // }
+  if (Firebase.ready() && signUpOK) {
+    uploadToFirebase(fbdo, "Informasi/SSID", ssid.toFloat());
+    uploadToFirebase(fbdo, "Informasi/IP", ip.toFloat());
+  }
 
   dht.begin();
 
@@ -144,15 +144,21 @@ void loop() {
         continue; // Skip the duplicate clear/NIR readings for serial output
       }
       serialData += ",";
+      char path[20];
       if (i < 5) {
         serialData += String(readings[i]);
+        sprintf(path, "sensorSpektrum/F%d", i + 1);
+        uploadToFirebase(fbdo, path, readings[i]);
       } else {
         serialData += String(readings[i]);
+        sprintf(path, "sensorSpektrum/F%d", i - 1);
+        uploadToFirebase(fbdo, path, readings[i]);
       }
       if (i == 9) break; // Stop after the first 8 F channels
     }
     serialData += ",";
     serialData += String(lux);
+    uploadToFirebase(fbdo, "sensorCahaya/Lux", lux);
 
     float suhu = dht.readTemperature();
     if (isnan(suhu)) {
@@ -160,6 +166,7 @@ void loop() {
       // Serial.println(F("Failed to read from DHT sensor!"));
       // return;
     }
+    uploadToFirebase(fbdo, "sensorSuhu/Suhu", suhu);
     serialData += ",";
     serialData += String(suhu);
 
