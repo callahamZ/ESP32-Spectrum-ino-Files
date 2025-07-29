@@ -1,0 +1,8 @@
+Link GitHub File Arduino:
+https://github.com/callahamZ/ESP32-Spectrum-ino-Files
+
+Link GitHub Aplikasi Android (versi TA original) :
+https://github.com/callahamZ/mySpectrum
+
+Link GitHub Aplikasi Android (versi Bluetooth untuk produksi massal) :
+https://github.com/callahamZ/mySpectrum_BTver

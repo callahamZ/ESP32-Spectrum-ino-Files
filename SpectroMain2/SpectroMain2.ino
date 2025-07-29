@@ -22,14 +22,11 @@ Adafruit_AS7341 as7341;
 #define MAX_SSID_LENGTH 32
 #define MAX_PASS_LENGTH 32
 
-#define WIFI_SSID "TKL"     // default wifi credential if EEPROM is empty
+#define WIFI_SSID "TKL"    // default wifi credential if EEPROM is empty
 #define WIFI_PASS "oraganti"
 
 #define API "AIzaSyADIx4Bxv0SO8nUIAzv-1n53oYEFi1h14I"
 #define DATABASE_URL "https://esp32-light-spectrum-analyzer-default-rtdb.asia-southeast1.firebasedatabase.app/"
-
-// WiFi connection timeout in milliseconds
-#define WIFI_CONNECTION_TIMEOUT 10000 // 20 seconds
 
 FirebaseAuth auth;
 FirebaseData fbdo;
@@ -40,13 +37,11 @@ DHT dht(DHTPIN, DHTTYPE);
 bool signUpOK = false;
 char wifi_ssid[MAX_SSID_LENGTH] = "";
 char wifi_pass[MAX_PASS_LENGTH] = "";
-bool wifiConnected = false; // Flag to track WiFi connection status
 
 //====================================================================
 // Overloaded function for float values
 bool uploadToFirebase(FirebaseData &fbdo, const char *path, float value)
 {
-  if (!wifiConnected) return false; // Skip if WiFi is not connected
   if (Firebase.RTDB.setFloat(&fbdo, path, value))
   {
     Serial.print(value);
@@ -65,46 +60,7 @@ bool uploadToFirebase(FirebaseData &fbdo, const char *path, float value)
 // NEW: Overloaded function for string values
 bool uploadToFirebase(FirebaseData &fbdo, const char *path, const String &value)
 {
-  if (!wifiConnected) return false; // Skip if WiFi is not connected
   if (Firebase.RTDB.setString(&fbdo, path, value))
-  {
-    Serial.print(value);
-    Serial.print(" - Saved to ");
-    Serial.println(path);
-    return true;
-  }
-  else
-  {
-    Serial.print("GAGAL : ");
-    Serial.println(fbdo.errorReason());
-    return false;
-  }
-}
-
-// Overloaded function for uint16_t values
-bool uploadToFirebase(FirebaseData &fbdo, const char *path, uint16_t value)
-{
-  if (!wifiConnected) return false; // Skip if WiFi is not connected
-  if (Firebase.RTDB.setInt(&fbdo, path, value)) // Assuming uint16_t can be stored as int in Firebase
-  {
-    Serial.print(value);
-    Serial.print(" - Saved to ");
-    Serial.println(path);
-    return true;
-  }
-  else
-  {
-    Serial.print("GAGAL : ");
-    Serial.println(fbdo.errorReason());
-    return false;
-  }
-}
-
-// Overloaded function for int values
-bool uploadToFirebase(FirebaseData &fbdo, const char *path, int value)
-{
-  if (!wifiConnected) return false; // Skip if WiFi is not connected
-  if (Firebase.RTDB.setInt(&fbdo, path, value))
   {
     Serial.print(value);
     Serial.print(" - Saved to ");
@@ -145,6 +101,45 @@ void loadWiFiCredentials()
   }
 }
 
+void processSerialData() {
+  if (Serial.available() > 0) {
+    String data = Serial.readStringUntil('\n');
+    data.trim(); // Remove leading/trailing whitespace
+
+    if (data.startsWith("@Setting,wifiSet,")) {
+      // Parse the data using commas as delimiters
+      int comma1 = data.indexOf(',', 17); // Find first comma after "@Setting,wifiSet,"
+      int comma2 = data.indexOf(',', comma1 + 1);
+
+      if (comma1 > 0 && comma2 > comma1) {
+        String ssid = data.substring(comma1 + 1, comma2);
+        String pass = data.substring(comma2 + 1);
+
+        //basic check
+        if(ssid.length() > MAX_SSID_LENGTH){
+          ssid = ssid.substring(0, MAX_SSID_LENGTH -1); // -1 for null terminator
+        }
+        if(pass.length() > MAX_PASS_LENGTH){
+          pass = pass.substring(0, MAX_PASS_LENGTH -1); // -1 for null terminator
+        }
+
+        ssid.toCharArray(wifi_ssid, MAX_SSID_LENGTH);
+        pass.toCharArray(wifi_pass, MAX_PASS_LENGTH);
+        saveWiFiCredentials(wifi_ssid, wifi_pass);
+
+        Serial.println("SSID: " + ssid);
+        Serial.println("Password: " + pass);
+        Serial.println("Wi-Fi credentials updated and saved.");
+        WiFi.disconnect();
+        WiFi.begin(wifi_ssid, wifi_pass); // Attempt to connect with new credentials
+      } else {
+        Serial.println("Invalid serial data format.  Use @Setting,wifiSet,ssid,password");
+      }
+    }
+  }
+}
+
+
 void setup() {
   delay(200);
   Serial.begin(115200);
@@ -175,79 +170,54 @@ void setup() {
 
   loadWiFiCredentials(); // Load Wi-Fi credentials from EEPROM
 
-  Serial.print("Attempting to connect to WiFi");
   WiFi.begin(wifi_ssid, wifi_pass); // Use loaded credentials
-
-  unsigned long startMillis = millis();
-  while (WiFi.status() != WL_CONNECTED && (millis() - startMillis < WIFI_CONNECTION_TIMEOUT))
+  Serial.print("Menghubungkan ke Wifi");
+  while (WiFi.status() != WL_CONNECTED)
   {
     Serial.print(".");
     delay(300);
   }
+  Serial.println();
+  Serial.print("Terhubung dengan IP : ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
 
-  if (WiFi.status() == WL_CONNECTED) {
-    wifiConnected = true;
-    Serial.println();
-    Serial.print("Terhubung dengan IP : ");
-    Serial.println(WiFi.localIP());
-    Serial.println();
+  String ssid = String(WiFi.SSID());
+  String ip = WiFi.localIP().toString();
 
-    String ssid = String(WiFi.SSID());
-    String ip = WiFi.localIP().toString();
+  config.api_key = API;
+  config.database_url = DATABASE_URL;
+  if (Firebase.signUp(&config, &auth, "", ""))
+  {
+    Serial.println("Sign Up OK");
+    signUpOK = true;
+  }
+  else
+  {
+    Serial.printf("%s\n", config.signer.signupError.message.c_str());
+  }
 
-    config.api_key = API;
-    config.database_url = DATABASE_URL;
-    if (Firebase.signUp(&config, &auth, "", ""))
-    {
-      Serial.println("Sign Up OK");
-      signUpOK = true;
-    }
-    else
-    {
-      Serial.printf("%s\n", config.signer.signupError.message.c_str());
-    }
+  config.token_status_callback = tokenStatusCallback;
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
 
-    config.token_status_callback = tokenStatusCallback;
-    Firebase.begin(&config, &auth);
-    Firebase.reconnectWiFi(true);
-
-    if (Firebase.ready() && signUpOK)
-    {
-      uploadToFirebase(fbdo, "Informasi/SSID", ssid); // Upload as String
-      uploadToFirebase(fbdo, "Informasi/IP", ip);     // Upload as String
-    }
-  } else {
-    wifiConnected = false;
-    Serial.println("\nFailed to connect to WiFi within the timeout period. Skipping Firebase operations.");
+  if (Firebase.ready() && signUpOK)
+  {
+    // *** CHANGE THESE LINES ***
+    uploadToFirebase(fbdo, "Informasi/SSID", ssid); // Upload as String
+    uploadToFirebase(fbdo, "Informasi/IP", ip);     // Upload as String
   }
 
   dht.begin();
 
-  if (wifiConnected) {
-    digitalWrite(ledBlue, HIGH);
-    delay(200);
-    digitalWrite(ledBlue, LOW);
-    delay(200);
-    digitalWrite(ledBlue, HIGH);
+  digitalWrite(ledBlue, HIGH);
+  delay(200);
+  digitalWrite(ledBlue, LOW);
+  delay(200);
+  digitalWrite(ledBlue, HIGH);
 
-    tone(buzzer, 1100, 200);
-    tone(buzzer, 1500, 200);
-  } else {
-    digitalWrite(ledBlue, HIGH);
-    delay(200);
-    digitalWrite(ledBlue, LOW);
-    delay(200);
-    digitalWrite(ledBlue, HIGH);
-    delay(200);
-    digitalWrite(ledBlue, LOW);
-    delay(200);
-    digitalWrite(ledBlue, HIGH);
-
-    tone(buzzer, 1100, 200);
-    tone(buzzer, 1500, 200);
-    tone(buzzer, 1900, 200);
-  }
-
+  tone(buzzer, 1100, 200);
+  tone(buzzer, 1500, 200);
 }
 
 // =======================================================
@@ -277,7 +247,7 @@ void loop() {
     }
 
     String serialData = "@DataCap";
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 12; i++)
     {
       if (i == 4 || i == 5)
       {
@@ -324,15 +294,14 @@ void loop() {
 
     as7341.enableLED(false);
 
-    if (wifiConnected) { // Only attempt to set Firebase flags if WiFi is connected
-      Firebase.RTDB.setBool(&fbdo, "dataFinish", true);
-      delay(200);
-      Serial.println("Data Finish Flag set");
-      Firebase.RTDB.setBool(&fbdo, "dataFinish", false);
-    }
+    Firebase.RTDB.setBool(&fbdo, "dataFinish", true);
+    delay(200);
+    Serial.println("Data Finish Flag set");
+    Firebase.RTDB.setBool(&fbdo, "dataFinish", false);
   }
   else if (buttonState == HIGH && buttonPressed)
   {
     buttonPressed = false; // Reset the flag when the button is released
   }
+  processSerialData(); // Check for serial commands
 }

@@ -1,9 +1,9 @@
 void setup() {
-  pinMode(34, INPUT);
+  pinMode(33, INPUT);
   Serial.begin(115200);
 }
 
 void loop() {
-  Serial.println(analogRead(34));
-  delay(400);
+  Serial.println(analogRead(33));
+  delay(700);
 }
