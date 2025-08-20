@@ -54,7 +54,7 @@ void setup() {
   pinMode(ledBlue, OUTPUT);
   pinMode(buzzer, OUTPUT);
   pinMode(photoDiode, INPUT);
-  pinMode(captureButton, INPUT);
+  pinMode(captureButton, INPUT_PULLUP);
 
   while (!Serial)
   {
